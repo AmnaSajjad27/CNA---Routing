@@ -1,0 +1,192 @@
+#!/usr/bin/env python3
+import sys
+
+# Computer Networks & Applications
+# Amna Sajjad
+# a1824665
+# Assignment 3 Routing
+
+#Link State Algorithim using Dijkstra's algortithim 
+
+# REQUIREMNETS:
+# 1. Reading topology from input
+# 2. Processes link state updates
+# 3. Print neighbour tables, link state database and routing tables
+
+
+# HIGH LEVEL IMPLEMENTATION PLAN
+
+# 1. Router structures and associated 4. Printing functions 
+# - For graphs - Network topology
+# - Routers - Each one has neigbour table, link state database and routing table
+
+# Class Router
+# Router network with identifier for router name, neighbour table (routers and associated cost),
+# link state database and routing table with shortest paths of all nodes 
+class Router:
+    def __init__(self, name):
+        self.name = name
+        self.neighbors = {}
+        self.link_state_database = {}
+        self.routing_table = {}
+
+    # Update_neighbor updates the table with a given neighbor and link cost 
+    # Also removes a link if cost is -1
+    def update_neighbor(self, neighbor, cost):
+        if cost == -1:
+            if neighbor in self.neighbors:
+                del self.neighbors[neighbor]
+        else:
+            self.neighbors[neighbor] = cost
+
+    # Prints neighbor table as specified in assignment description
+    def print_neighbor_table(self):
+        print(f"{self.name} Neighbour Table:")
+        for neighbor, cost in sorted(self.neighbors.items()):
+            print(f"{neighbor}|{cost}")
+        print()
+
+    # Updates the LSDB table with a link between two routers and its cost 
+    def update_link_state_database(self, router_1, router_2, cost):
+        key = (router_1, router_2) if router_1 < router_2 else (router_2, router_1)
+        if cost == -1:
+            if key in self.link_state_database:
+                del self.link_state_database[key]
+        else:
+            self.link_state_database[key] = cost
+
+    # print LSDB
+    def print_link_state_database(self):
+        print(f"{self.name} LSDB:")
+        for (router_1, router_2), cost in sorted(self.link_state_database.items()):
+            print(f"{router_1}|{router_2}|{cost}")
+        print()
+
+    # Computing routing table using Dijkstra's Algorithm 
+    # Initialises all distances to infinity, 
+    # using a while loop, iterates through all links,
+    # compares to get node with smallest distance, updates the distance if shorter found 
+    # then marks the node as visited and remove from list not_visited
+    # find next hop and add the cost to routing table 
+    def compute_routing_table(self, graph):
+        not_visited = {router: float('inf') for router in graph}
+        not_visited[self.name] = 0
+        visited = {}
+        path = {}
+
+        while not_visited:
+            min_router_cost = min(not_visited, key=not_visited.get)
+            min_distance = not_visited[min_router_cost]
+
+            for neighbor, cost in graph[min_router_cost].items():
+                if neighbor not in not_visited:
+                    continue
+                new_distance = min_distance + cost
+                if new_distance < not_visited[neighbor]:
+                    not_visited[neighbor] = new_distance
+                    path[neighbor] = min_router_cost
+
+            visited[min_router_cost] = not_visited[min_router_cost]
+            not_visited.pop(min_router_cost)
+
+        self.routing_table = {}
+        for dest in visited:
+            if dest == self.name:
+                continue
+            next_hop = dest
+            while path.get(next_hop) != self.name and path.get(next_hop):
+                next_hop = path[next_hop]
+            self.routing_table[dest] = (next_hop, visited[dest])
+
+    # print routing table 
+    def print_routing_table(self):
+        print(f"{self.name} Routing Table:")
+        for dest in sorted(self.routing_table):
+            next_hop, cost = self.routing_table[dest]
+            print(f"{dest}|{next_hop}|{cost}")
+        print()
+
+        
+# 3. Main function for input handling
+# Read input from command line and store Router objects
+def main():
+    input_data = sys.stdin.read().splitlines()
+
+    routers = {}
+    state = None
+    update_list = []
+    temp_routers_to_print = []
+
+    # Update topology and recompute routing table
+    def update_graph():
+        graph = {router_name: router.neighbors.copy() for router_name, router in routers.items()}
+        for router in routers.values():
+            router.compute_routing_table(graph)
+
+    # Process router updates and print tables 
+    def process_router_update(routers_to_print):
+        for router_name in routers_to_print:
+            if router_name in routers:
+                router = routers[router_name]
+                router.print_neighbor_table()
+                router.print_link_state_database()
+                router.print_routing_table()
+            else:
+                # Print empty tables
+                print(f"{router_name} Neighbour Table:\n")
+                print(f"{router_name} LSDB:\n")
+                print(f"{router_name} Routing Table:\n")
+    # for loop to handle end of block, save routers that need to be printed in temp
+    for line in input_data:
+        if line in ["LINKSTATE", "UPDATE", "END"]:
+            if state == "END":
+                update_graph()
+                process_router_update(temp_routers_to_print)
+                temp_routers_to_print = []
+            state = line
+            if state == "UPDATE":
+                update_graph()
+                for router_name in update_list:
+                    if router_name not in routers:
+                        routers[router_name] = Router(router_name)
+                process_router_update(update_list)
+                update_list = []
+            continue
+        
+        # find out what needs updating 
+        if state in ["LINKSTATE", "UPDATE"]:
+            parts = line.split()
+            if len(parts) == 1:
+                update_list.append(parts[0])
+                continue
+
+            link = parts[0].split('-')
+            router_1, router_2 = link
+            cost = int(parts[1])
+
+            if router_1 not in routers:
+                routers[router_1] = Router(router_1)
+            if router_2 not in routers:
+                routers[router_2] = Router(router_2)
+
+            # Update neighbors and LSDB for both routers in the link
+            routers[router_1].update_neighbor(router_2, cost)
+            routers[router_2].update_neighbor(router_1, cost)
+            routers[router_1].update_link_state_database(router_1, router_2, cost)
+            routers[router_2].update_link_state_database(router_1, router_2, cost)
+
+            # Propagate LSDB updates to all routers - ensure global view in topology
+            for r in routers.values():
+                r.link_state_database = routers[router_1].link_state_database.copy()
+
+            if len(parts) == 3:
+                optional_list = parts[2].split(',')
+                update_graph()
+                process_router_update(optional_list)
+
+    if state == "END":
+        update_graph()
+        process_router_update(temp_routers_to_print)
+
+if __name__ == "__main__":
+    main()

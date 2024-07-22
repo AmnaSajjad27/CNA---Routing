@@ -1,0 +1,30 @@
+B Neighbour Table:
+A|4
+C|1
+D|5
+
+B LSDB:
+A|B|4
+A|D|2
+B|C|1
+B|D|5
+
+B Routing Table:
+A|A|4
+C|C|1
+D|A|6
+
+D Neighbour Table:
+A|2
+B|5
+
+D LSDB:
+A|B|4
+A|D|2
+B|C|1
+B|D|5
+
+D Routing Table:
+A|A|2
+B|A|5
+C|B|6
